@@ -18,6 +18,7 @@
 #include <linux/sched.h>
 #include <linux/sched/clock.h>
 #include <linux/sched/debug.h>
+#include <linux/sched/mm.h>
 #include <linux/sched/rt.h>
 #include <linux/sched/task.h>
 #include <uapi/linux/sched/types.h>
@@ -68,6 +69,7 @@ static bool system_server_exist;
 
 static bool Hang_Detect_first;
 static bool hd_detect_enabled;
+static bool hd_zygote_stopped;
 static int hd_timeout = 0x7fffffff;
 static int hang_detect_counter = 0x7fffffff;
 static int dump_bt_done;
@@ -239,9 +241,11 @@ static int monitor_hang_show(struct seq_file *m, void *v)
 {
 	struct name_list *pList = NULL;
 #ifdef CONFIG_MTK_HANG_DETECT_DB
-	SEQ_printf(m, "[Hang_Detect] show Hang_info size %d\n ",
-			(int)strlen(Hang_Info));
-	SEQ_printf(m, "%s", Hang_Info);
+	SEQ_printf(m, "[Hang_Detect] show hang_detect_raw\n");
+	if (Hang_Info)
+		SEQ_printf(m, "%s", Hang_Info);
+	else
+		SEQ_printf(m, "hang_detect_raw buffer is not ready\n");
 #endif
 	raw_spin_lock(&white_list_lock);
 	pList = white_list;
@@ -340,8 +344,43 @@ static ssize_t monitor_hang_read(struct file *filp, char __user *buf,
 static ssize_t monitor_hang_write(struct file *filp, const char __user *buf,
 		size_t count, loff_t *f_pos)
 {
+	char msg[8] = {0};
 
-	return 0;
+	if (count >= 2) {
+		pr_info("hang_detect: invalid input\n");
+		return -EINVAL;
+	}
+
+	if (!buf) {
+		pr_info("hang_detect: invalid user buf\n");
+		return -EINVAL;
+	}
+
+	if (copy_from_user(msg, buf, count)) {
+		pr_info("hang_detect: failed to copy from user\n");
+		return -EFAULT;
+	}
+
+	if (strncmp(current->comm, "init", 4))
+		return  -EINVAL;
+
+	if (msg[0] == '0') {
+		hd_detect_enabled = false;
+		hd_zygote_stopped = true;
+		pr_info("hang_detect: disable by stop cmd\n");
+	} else if (msg[0] == '1') {
+		if (hd_zygote_stopped) {
+			hd_detect_enabled = true;
+			hd_zygote_stopped = false;
+			pr_info("hang_detect: enable by start cmd\n");
+		} else {
+			pr_info("hang_detect: zygote running\n");
+		}
+	} else {
+		pr_info("hang_detect: invalid control msg\n");
+	}
+
+	return count;
 }
 
 static long monitor_hang_ioctl(struct file *file, unsigned int cmd,
@@ -373,12 +412,8 @@ static long monitor_hang_ioctl(struct file *file, unsigned int cmd,
 #ifdef CONFIG_MTK_HANG_DETECT_DB
 	if (cmd == HANG_SET_REBOOT) {
 		reboot_flag = true;
-#ifdef CONFIG_MTK_ENG_BUILD
-		hang_detect_counter = 3;
-#else
-		hang_detect_counter = 1;
-#endif
-		hd_timeout = 3;
+		hang_detect_counter = 5;
+		hd_timeout = 5;
 		hd_detect_enabled = true;
 		pr_info("hang_detect: %s set reboot command.\n", current->comm);
 		return ret;
@@ -846,7 +881,7 @@ static int DumpThreadNativeMaps_log(pid_t pid, struct task_struct *current_task)
 		return -1;
 	}
 
-	if (!current_task->mm) {
+	if (!get_task_mm(current_task)) {
 		pr_info(" %s,%d:%s: current_task->mm == NULL",
 			__func__, pid, current_task->comm);
 		return -1;
@@ -905,6 +940,7 @@ static int DumpThreadNativeMaps_log(pid_t pid, struct task_struct *current_task)
 		mapcount++;
 	}
 	up_read(&current_task->mm->mmap_sem);
+	mmput(current_task->mm);
 
 	return 0;
 }

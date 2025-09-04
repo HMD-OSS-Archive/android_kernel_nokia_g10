@@ -11,6 +11,10 @@
 #include <linux/compat.h>
 #endif
 
+struct CAM_CAL_SENSOR_INFO {
+	u32 sensor_id;
+};
+
 //+bug591033 cdzk, add, 2020/10/27, the otp porting
 struct stCAM_CAL_DATAINFO_STRUCT{
 	u32 sensorID; // Sensor ID

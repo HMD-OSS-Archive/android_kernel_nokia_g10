@@ -65,12 +65,22 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  * Server-side bridge entry points
  */
 
+static_assert(CACHE_BATCH_MAX <= IMG_UINT32_MAX,
+	      "CACHE_BATCH_MAX must not be larger than IMG_UINT32_MAX");
+
 static IMG_INT
 PVRSRVBridgeCacheOpQueue(IMG_UINT32 ui32DispatchTableEntry,
-			 PVRSRV_BRIDGE_IN_CACHEOPQUEUE * psCacheOpQueueIN,
-			 PVRSRV_BRIDGE_OUT_CACHEOPQUEUE * psCacheOpQueueOUT,
+			 IMG_UINT8 * psCacheOpQueueIN_UI8,
+			 IMG_UINT8 * psCacheOpQueueOUT_UI8,
 			 CONNECTION_DATA * psConnection)
 {
+	PVRSRV_BRIDGE_IN_CACHEOPQUEUE *psCacheOpQueueIN =
+	    (PVRSRV_BRIDGE_IN_CACHEOPQUEUE *)
+	    IMG_OFFSET_ADDR(psCacheOpQueueIN_UI8, 0);
+	PVRSRV_BRIDGE_OUT_CACHEOPQUEUE *psCacheOpQueueOUT =
+	    (PVRSRV_BRIDGE_OUT_CACHEOPQUEUE *)
+	    IMG_OFFSET_ADDR(psCacheOpQueueOUT_UI8, 0);
+
 	PMR **psPMRInt = NULL;
 	IMG_HANDLE *hPMRInt2 = NULL;
 	IMG_UINT64 *ui64AddressInt = NULL;
@@ -151,6 +161,9 @@ PVRSRVBridgeCacheOpQueue(IMG_UINT32 ui32DispatchTableEntry,
 	{
 		psPMRInt =
 		    (PMR **) IMG_OFFSET_ADDR(pArrayArgsBuffer, ui32NextOffset);
+		OSCachedMemSet(psPMRInt, 0,
+			       psCacheOpQueueIN->ui32NumCacheOps *
+			       sizeof(PMR *));
 		ui32NextOffset +=
 		    psCacheOpQueueIN->ui32NumCacheOps * sizeof(PMR *);
 		hPMRInt2 =
@@ -320,7 +333,7 @@ CacheOpQueue_exit:
 		{
 
 			/* Unreference the previously looked up handle */
-			if (hPMRInt2[i])
+			if (psPMRInt[i])
 			{
 				PVRSRVReleaseHandleUnlocked(psConnection->
 							    psHandleBase,
@@ -333,7 +346,10 @@ CacheOpQueue_exit:
 	UnlockHandle(psConnection->psHandleBase);
 
 	/* Allocated space should be equal to the last updated offset */
-	PVR_ASSERT(ui32BufferSize == ui32NextOffset);
+#ifdef PVRSRV_NEED_PVR_ASSERT
+	if (psCacheOpQueueOUT->eError == PVRSRV_OK)
+		PVR_ASSERT(ui32BufferSize == ui32NextOffset);
+#endif /* PVRSRV_NEED_PVR_ASSERT */
 
 #if defined(INTEGRITY_OS)
 	if (pArrayArgsBuffer)
@@ -347,10 +363,17 @@ CacheOpQueue_exit:
 
 static IMG_INT
 PVRSRVBridgeCacheOpExec(IMG_UINT32 ui32DispatchTableEntry,
-			PVRSRV_BRIDGE_IN_CACHEOPEXEC * psCacheOpExecIN,
-			PVRSRV_BRIDGE_OUT_CACHEOPEXEC * psCacheOpExecOUT,
+			IMG_UINT8 * psCacheOpExecIN_UI8,
+			IMG_UINT8 * psCacheOpExecOUT_UI8,
 			CONNECTION_DATA * psConnection)
 {
+	PVRSRV_BRIDGE_IN_CACHEOPEXEC *psCacheOpExecIN =
+	    (PVRSRV_BRIDGE_IN_CACHEOPEXEC *)
+	    IMG_OFFSET_ADDR(psCacheOpExecIN_UI8, 0);
+	PVRSRV_BRIDGE_OUT_CACHEOPEXEC *psCacheOpExecOUT =
+	    (PVRSRV_BRIDGE_OUT_CACHEOPEXEC *)
+	    IMG_OFFSET_ADDR(psCacheOpExecOUT_UI8, 0);
+
 	IMG_HANDLE hPMR = psCacheOpExecIN->hPMR;
 	PMR *psPMRInt = NULL;
 
@@ -398,10 +421,17 @@ CacheOpExec_exit:
 
 static IMG_INT
 PVRSRVBridgeCacheOpLog(IMG_UINT32 ui32DispatchTableEntry,
-		       PVRSRV_BRIDGE_IN_CACHEOPLOG * psCacheOpLogIN,
-		       PVRSRV_BRIDGE_OUT_CACHEOPLOG * psCacheOpLogOUT,
+		       IMG_UINT8 * psCacheOpLogIN_UI8,
+		       IMG_UINT8 * psCacheOpLogOUT_UI8,
 		       CONNECTION_DATA * psConnection)
 {
+	PVRSRV_BRIDGE_IN_CACHEOPLOG *psCacheOpLogIN =
+	    (PVRSRV_BRIDGE_IN_CACHEOPLOG *) IMG_OFFSET_ADDR(psCacheOpLogIN_UI8,
+							    0);
+	PVRSRV_BRIDGE_OUT_CACHEOPLOG *psCacheOpLogOUT =
+	    (PVRSRV_BRIDGE_OUT_CACHEOPLOG *)
+	    IMG_OFFSET_ADDR(psCacheOpLogOUT_UI8, 0);
+
 	IMG_HANDLE hPMR = psCacheOpLogIN->hPMR;
 	PMR *psPMRInt = NULL;
 

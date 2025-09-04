@@ -1770,6 +1770,8 @@ static int musb_gadget_dequeue(struct usb_ep *ep, struct usb_request *request)
 	if (!ep || !request || to_musb_request(request)->ep != musb_ep)
 		return -EINVAL;
 
+	disable_irq_nosync(musb->nIrq);
+
 	spin_lock_irqsave(&musb->lock, flags);
 
 	list_for_each_entry(r, &musb_ep->req_list, list) {
@@ -1792,10 +1794,10 @@ static int musb_gadget_dequeue(struct usb_ep *ep, struct usb_request *request)
 			 ep->address);
 		musb_flush_qmu(musb_ep->hw_ep->epnum,
 				(musb_ep->is_in ? TXQ : RXQ));
-		musb_g_giveback(musb_ep, request, -ECONNRESET);
-		musb_restart_qmu(musb,
+		mtk_qmu_enable(musb,
 				musb_ep->hw_ep->epnum,
 				(musb_ep->is_in ? TXQ : RXQ));
+		musb_g_giveback(musb_ep, request, -ECONNRESET);
 	}
 #else
 	/* ... else abort the dma transfer ... */
@@ -1819,6 +1821,8 @@ static int musb_gadget_dequeue(struct usb_ep *ep, struct usb_request *request)
 
 done:
 	spin_unlock_irqrestore(&musb->lock, flags);
+
+	enable_irq(musb->nIrq);
 	return status;
 }
 
@@ -2246,6 +2250,23 @@ static int musb_gadget_vbus_draw
 	return usb_phy_set_power(musb->xceiv, mA);
 }
 
+/* default value 0 */
+static int usb_rdy;
+void set_usb_rdy(void)
+{
+	DBG(0, "set usb_rdy, wake up bat\n");
+	usb_rdy = 1;
+}
+
+bool is_usb_rdy(void)
+{
+	if (usb_rdy)
+		return true;
+	else
+		return false;
+}
+EXPORT_SYMBOL(is_usb_rdy);
+
 static int musb_gadget_pullup(struct usb_gadget *gadget, int is_on)
 {
 	struct musb *musb = gadget_to_musb(gadget);
@@ -2273,6 +2294,7 @@ static int musb_gadget_pullup(struct usb_gadget *gadget, int is_on)
 
 	if (!musb->is_ready && is_on) {
 		musb->is_ready = true;
+		//set_usb_rdy();
 		/* direct issue connection work if usb is forced on */
 		if (musb_force_on) {
 			DBG(0, "mt_usb_connect() on is_ready begin\n");
@@ -2282,6 +2304,9 @@ static int musb_gadget_pullup(struct usb_gadget *gadget, int is_on)
 			mt_usb_reconnect();
 		}
 	}
+
+	if (!is_usb_rdy() && is_on)
+		set_usb_rdy();
 
 	spin_unlock_irqrestore(&musb->lock, flags);
 

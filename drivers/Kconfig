@@ -1,20 +1,12 @@
 # SPDX-License-Identifier: GPL-2.0
 menu "Device Drivers"
 
-# bug585487,wangyongfei_wt,20200917,add,google-key
-config WT_PROJECT_T99621AA3
-	bool "Define for T99621AA3"
-	help
-	  Say Y here for distinguish different projects
-# bug585487,wangyongfei_wt,20200917,add,google-key
-
 # bug 589756, yaocankun, mod, 20201010, for charger bringup
 config WT_PROJECT_T99653AA1
 	bool "Define for T99653AA1"
 	help
 	  Say Y here for distinguish different projects
 # bug 589756, yaocankun, mod, 20201010, for charger bringup
-
 # Bug591044 liubaolin.wt 20201011 modify, support OTG function,start
 config WT_PROJECT_T99651AA2
 	bool "Define for T99653AA1"

@@ -25,8 +25,8 @@
 #include <dt-bindings/reset/ti-syscon.h>
 
 / {
-	model = "mt6779";
-	compatible = "mediatek,mt6779";
+	model = "MT6779";
+	compatible = "mediatek,MT6779";
 	interrupt-parent = <&sysirq>;
 	#address-cells = <2>;
 	#size-cells = <2>;
@@ -786,6 +786,7 @@ firmware_class.path=/vendor/firmware loop.max_part=7";
 
 		infracfg_ao: clock-reset-controller@10001000 {
 			compatible = "mediatek,common-infracfg_ao",
+				     "mediatek,infracfg_ao",
 				     "mediatek,mt6779-infracfg_ao", "syscon", "simple-mfd";
 			reg = <0 0x10001000 0 0x1000>;
 			#clock-cells = <1>;
@@ -1588,6 +1589,11 @@ firmware_class.path=/vendor/firmware loop.max_part=7";
 			clock-names = "GCE", "GCE_TIMER";
 		};
 
+		ap_ccif2@1023c000 {
+			compatible = "mediatek,ap_ccif2";
+			reg = <0 0x1023c000 0 0x1000>;
+		};
+
 		md_ccif4@1024d000 {
 			compatible = "mediatek,md_ccif4";
 			reg = <0 0x1024d000 0 0x1000>;
@@ -1657,6 +1663,7 @@ firmware_class.path=/vendor/firmware loop.max_part=7";
 			interrupts = <GIC_SPI 201 IRQ_TYPE_LEVEL_HIGH>;
 			core_1 = "enable";
 			scp_sramSize = <0x00080000>;
+			scp_mpuRegionId = <6>;
 			scp_feature_tbl = <0 47>,   /* vow */
 					  <1 356>,  /* dsp */
 					  <2 62>,   /* sensor */
@@ -2610,6 +2617,8 @@ firmware_class.path=/vendor/firmware loop.max_part=7";
 			compatible = "mediatek,mt6779-disp_color0";
 			reg = <0 0x1400e000 0 0x1000>;
 			interrupts = <GIC_SPI 255 IRQ_TYPE_LEVEL_LOW>;
+			clocks = <&mmsys CLK_MM_DISP_COLOR0>;
+			clock-names = "MDP_COLOR";
 		};
 
 		disp_ccorr0@1400f000 {
@@ -3344,6 +3353,10 @@ firmware_class.path=/vendor/firmware loop.max_part=7";
 			compatible = "mediatek,imgsensor";
 		};
 
+		camera_af_hw_node: camera_af_hw_node {
+			compatible = "mediatek,camera_af_lens";
+		};
+
 		flashlight_core: flashlight_core {
 			compatible = "mediatek,flashlight_core";
 		};
@@ -3529,10 +3542,12 @@ firmware_class.path=/vendor/firmware loop.max_part=7";
 			#size-cells = <2>;
 			ranges;
 			dr_mode = "otg";
-			mediatek,force-vbus = <1>;
-			mediatek,clk-mgr = <1>;
-			mediatek,spm-mgr = <1>;
 			maximum-speed = "high-speed";
+			mediatek,force-vbus;
+			mediatek,clk-mgr;
+			mediatek,spm-mgr;
+			mediatek,usb3-drd;
+			mediatek,noise-still-tr;
 			usb-role-switch;
 			mediatek,syscon-wakeup = <&pericfg 0x420 101>;
 			wakeup-source;

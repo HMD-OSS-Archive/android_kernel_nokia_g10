@@ -12,7 +12,7 @@
 #include "lens_list.h"
 #include <linux/ioctl.h>
 
-#define MAX_NUM_OF_LENS 32
+#define MAX_NUM_OF_LENS 35
 
 #define AF_MAGIC 'A'
 
@@ -77,6 +77,8 @@
 #define AFDRV_OV8825AF "OV8825AF"
 #define AFDRV_WV511AAF "WV511AAF"
 #define AFDRV_DW9718TAF "DW9718TAF"
+#define AFDRV_GT9772AF "GT9772AF"
+#define AFDRV_GT9768AF "GT9768AF"
 //bug584789 chenbocheng.wt, add, 2020/10/28, main camera lens fp5516we5 porting
 #define AFDRV_FP5516WE4 "FP5516WE4"
 //bug584789 chenbocheng.wt, add, 2020/10/28, main camera lens fp5516we4_st porting

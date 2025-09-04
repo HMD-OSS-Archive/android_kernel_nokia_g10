@@ -159,10 +159,10 @@ static int EEPROM_set_i2c_bus(unsigned int deviceID,
 	if (idx == IMGSENSOR_SENSOR_IDX_NONE)
 		return -EFAULT;
 
-	if (i2c_idx < I2C_DEV_IDX_1 || i2c_idx >= I2C_DEV_IDX_MAX)
+	if (i2c_idx >= I2C_DEV_IDX_MAX)
 		return -EFAULT;
 
-	client = g_pstI2Cclients[i2c_idx];
+	client = g_pstI2Cclients[(unsigned int)i2c_idx];
 	pr_debug("%s end! deviceID=%d index=%u client=%p\n",
 		 __func__, deviceID, idx, client);
 
@@ -1105,10 +1105,10 @@ static int compat_put_cal_info_struct
 	err |= put_user(i, &data32->deviceID);
 
 	/* Assume pointer is not change */
-
+#if 1
 	err |= get_user(p, (compat_uptr_t *) &data->pu1Params);
 	err |= put_user(p, &data32->pu1Params);
-
+#endif
 	return err;
 }
 
@@ -1199,6 +1199,13 @@ static long EEPROM_drv_compat_ioctl
 
 #endif
 
+int ov8856_af_mac;
+int ov8856_af_inf;
+int ov8856_af_lsb;
+
+int s5k4h7_af_mac;
+int s5k4h7_af_inf;
+int s5k4h7_af_lsb;
 #define NEW_UNLOCK_IOCTL
 #ifndef NEW_UNLOCK_IOCTL
 static int EEPROM_drv_ioctl(struct inode *a_pstInode,
@@ -1418,22 +1425,42 @@ static long EEPROM_drv_ioctl(struct file *file,
 			g_lastDevID = ptempbuf->deviceID;
 		}
 
-            if (pcmdInf != NULL) {
-                if (pcmdInf->readCMDFunc != NULL)
-                    i4RetValue =
-                        pcmdInf->readCMDFunc(pcmdInf->client,
-                                  ptempbuf->u4Offset,
-                                  pu1Params,
-                                  ptempbuf->u4Length);
-                else {
-                    pr_debug("pcmdInf->readCMDFunc == NULL\n");
-                    kfree(pBuff);
-                    kfree(pu1Params);
-                    return -EFAULT;
-                }
-            }
-        }
-        //-bug591033 cdzk, modify, 2020/10/27, the otp porting
+		if (pcmdInf != NULL) {
+			if (pcmdInf->readCMDFunc != NULL) {
+				if ((ptempbuf->sensorID == 0x885a)
+				&& (ptempbuf->u4Offset == 0x7500))
+					*pu1Params = i4RetValue = ov8856_af_inf;
+				else if ((ptempbuf->sensorID == 0x885a)
+				&& (ptempbuf->u4Offset == 0x7501))
+					*pu1Params = i4RetValue = ov8856_af_mac;
+				else if ((ptempbuf->sensorID == 0x885a)
+				&& (ptempbuf->u4Offset == 0x7502))
+					*pu1Params = i4RetValue = ov8856_af_lsb;
+				else if ((ptempbuf->sensorID == 0x487b)
+				&& (ptempbuf->u4Offset == 0x7500))
+					*pu1Params = i4RetValue = s5k4h7_af_inf;
+				else if ((ptempbuf->sensorID == 0x487b)
+				&& (ptempbuf->u4Offset == 0x7501))
+					*pu1Params = i4RetValue = s5k4h7_af_mac;
+				else if ((ptempbuf->sensorID == 0x487b)
+				&& (ptempbuf->u4Offset == 0x7502))
+					*pu1Params = i4RetValue = s5k4h7_af_lsb;
+				else
+					i4RetValue =
+						pcmdInf->readCMDFunc(
+							  pcmdInf->client,
+							  ptempbuf->u4Offset,
+							  pu1Params,
+							  ptempbuf->u4Length);
+			}
+			else {
+				pr_debug("pcmdInf->readCMDFunc == NULL\n");
+				kfree(pBuff);
+				kfree(pu1Params);
+				return -EFAULT;
+			}
+		}
+
 //+bug584789 chenbocheng.wt, add, 2020/10/30, add main camera s5kgm1 and wide camera hi556 otp code
 #elif defined(CONFIG_WT_PROJECT_T99653AA1)
         LOG_INF("SensorID=%x DeviceID=%x\n", ptempbuf->sensorID, ptempbuf->deviceID);

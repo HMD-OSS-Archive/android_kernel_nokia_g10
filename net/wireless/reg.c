@@ -1057,12 +1057,12 @@ static int query_regdb_file(const char *alpha2)
         else {
 	    ASSERT_RTNL();
 
-	    if (regdb)
-		    return query_regdb(alpha2);
+	if (regdb)
+		return query_regdb(alpha2);
 
-	    alpha2 = kmemdup(alpha2, 2, GFP_KERNEL);
-	    if (!alpha2)
-		    return -ENOMEM;
+	alpha2 = kmemdup(alpha2, 2, GFP_KERNEL);
+	if (!alpha2)
+		return -ENOMEM;
 
 	    return request_firmware_nowait(THIS_MODULE, true, "regulatory.db",
 				           &reg_pdev->dev, GFP_KERNEL,

@@ -91,6 +91,8 @@ static struct stAF_DrvList g_stAF_DrvList[MAX_NUM_OF_LENS] = {
 	 FP5516WE4_ST_Release, FP5516WE4_ST_GetFileName, NULL},
 	{1, AFDRV_DW9718TAF, DW9718TAF_SetI2Cclient, DW9718TAF_Ioctl,
 	 DW9718TAF_Release, DW9718TAF_GetFileName, NULL},
+	{1, AFDRV_GT9772AF, GT9772AF_SetI2Cclient, GT9772AF_Ioctl,
+	 GT9772AF_Release, GT9772AF_GetFileName, NULL},
 	{1, AFDRV_AK7371AF, AK7371AF_SetI2Cclient, AK7371AF_Ioctl,
 	 AK7371AF_Release, AK7371AF_GetFileName, NULL},
 	{1, AFDRV_BU6424AF, BU6424AF_SetI2Cclient, BU6424AF_Ioctl,
@@ -112,6 +114,8 @@ static struct stAF_DrvList g_stAF_DrvList[MAX_NUM_OF_LENS] = {
 	},
 	{1, AFDRV_DW9714AF, DW9714AF_SetI2Cclient, DW9714AF_Ioctl,
 	 DW9714AF_Release, DW9714AF_GetFileName, NULL},
+	 {1, AFDRV_DW9718SAF, DW9718SAF_SetI2Cclient, DW9718SAF_Ioctl,
+	 DW9718SAF_Release, DW9718SAF_GetFileName, NULL},
 	//+ bug590447,cdzk,add,20200923,camera af bring up
 	{1, AFDRV_CN3927E, CN3927E_SetI2Cclient, CN3927E_Ioctl,
 	 CN3927E_Release, CN3927E_GetFileName, NULL},
@@ -146,6 +150,10 @@ static struct stAF_DrvList g_stAF_DrvList[MAX_NUM_OF_LENS] = {
 	 DW9718AF_Release, DW9718AF_GetFileName, NULL},
 	{1, AFDRV_GT9764AF, GT9764AF_SetI2Cclient, GT9764AF_Ioctl,
 	GT9764AF_Release, GT9764AF_GetFileName, NULL},
+//#ifdef SUPPORT_GT9768AF
+	{1, AFDRV_GT9768AF, GT9768AF_SetI2Cclient, GT9768AF_Ioctl,
+	GT9768AF_Release, GT9768AF_GetFileName, NULL},
+//#endif
 	{1, AFDRV_LC898212AF, LC898212AF_SetI2Cclient, LC898212AF_Ioctl,
 	 LC898212AF_Release, LC898212AF_GetFileName, NULL},
 	{1, AFDRV_LC898214AF, LC898214AF_SetI2Cclient, LC898214AF_Ioctl,
@@ -185,8 +193,8 @@ static struct pinctrl_state *vcamaf_pio_on;
 static struct pinctrl_state *vcamaf_pio_off;
 
 #define CAMAF_PMIC     "camaf_m1_pmic"
-#define CAMAF_GPIO_ON  "camaf_m1_gpio_on"
-#define CAMAF_GPIO_OFF "camaf_m1_gpio_off"
+#define CAMAF_GPIO_ON  "cam0_ldo_vcamaf_1"
+#define CAMAF_GPIO_OFF "cam0_ldo_vcamaf_0"
 
 static void camaf_power_init(void)
 {

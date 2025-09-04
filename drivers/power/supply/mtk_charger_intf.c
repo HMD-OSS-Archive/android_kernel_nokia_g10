@@ -379,6 +379,9 @@ int get_charger_type(struct mtk_charger *info)
 	static struct power_supply *chg_psy;
 	int ret;
 
+	prop.intval = 0;
+	prop2.intval = 0;
+	prop3.intval = 0;
 	chg_psy = info->chg_psy;
 
 	if (chg_psy == NULL || IS_ERR(chg_psy)) {
@@ -498,7 +501,7 @@ int get_charger_zcv(struct mtk_charger *info,
 #define PMIC_RG_VCDT_HV_EN_MASK		0x1
 #define PMIC_RG_VCDT_HV_EN_SHIFT	11
 
-static void pmic_set_register_value(struct regmap *map,
+static void pmic_set_register_value1(struct regmap *map,
 	unsigned int addr,
 	unsigned int mask,
 	unsigned int shift,
@@ -510,7 +513,7 @@ static void pmic_set_register_value(struct regmap *map,
 		val << shift);
 }
 
-unsigned int pmic_get_register_value(struct regmap *map,
+unsigned int pmic_get_register_value1(struct regmap *map,
 	unsigned int addr,
 	unsigned int mask,
 	unsigned int shift)
@@ -552,7 +555,7 @@ int disable_hw_ovp(struct mtk_charger *info, int en)
 
 	regmap = chip->regmap;
 
-	pmic_set_register_value(regmap,
+	pmic_set_register_value1(regmap,
 		PMIC_RG_VCDT_HV_EN_ADDR,
 		PMIC_RG_VCDT_HV_EN_SHIFT,
 		PMIC_RG_VCDT_HV_EN_MASK,

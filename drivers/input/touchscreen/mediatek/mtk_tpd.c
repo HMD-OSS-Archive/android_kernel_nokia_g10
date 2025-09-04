@@ -1,15 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2016 MediaTek Inc.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
- */
+ * Copyright (c) 2019 MediaTek Inc.
+*/
 #include "tpd.h"
 #include <linux/slab.h>
 #include <linux/device.h>
@@ -75,7 +67,7 @@ enum module_name{
 void tpd_get_dts_info(void)
 {
 	struct device_node *node1 = NULL;
-	int key_dim_local[16], i;
+	int key_dim_local[16] = {0}, i = 0;
 
 	node1 = of_find_matching_node(node1, touch_of_match);
 	if (node1) {
@@ -166,7 +158,7 @@ static DEFINE_MUTEX(tpd_set_gpio_mutex);
 void tpd_gpio_as_int(int pin)
 {
 	mutex_lock(&tpd_set_gpio_mutex);
-	TPD_DEBUG("[tpd]tpd_gpio_as_int\n");
+	TPD_DEBUG("[tpd] %s\n", __func__);
 	if (pin == 1)
 		pinctrl_select_state(pinctrl1, eint_as_int);
 	mutex_unlock(&tpd_set_gpio_mutex);
@@ -175,7 +167,7 @@ void tpd_gpio_as_int(int pin)
 void tpd_gpio_output(int pin, int level)
 {
 	mutex_lock(&tpd_set_gpio_mutex);
-	TPD_DEBUG("tpd_gpio_output pin = %d, level = %d\n", pin, level);
+	TPD_DEBUG("%s pin = %d, level = %d\n", __func__, pin, level);
 	if (pin == 1) {
 		if (level)
 			pinctrl_select_state(pinctrl1, eint_output1);
@@ -209,11 +201,13 @@ int tpd_get_gpio_info(struct platform_device *pdev)
 		dev_info(&pdev->dev, "fwq Cannot find pinctrl1!\n");
 		return ret;
 	}
+#ifndef CONFIG_TOUCHSCREEN_HIMAX_CHIPSET_8789P1_8185P3
 	pins_default = pinctrl_lookup_state(pinctrl1, "default");
 	if (IS_ERR(pins_default)) {
 		ret = PTR_ERR(pins_default);
 		TPD_DMESG("Cannot find pinctrl default %d!\n", ret);
 	}
+#endif
 	eint_as_int = pinctrl_lookup_state(pinctrl1, "state_eint_as_int");
 	if (IS_ERR(eint_as_int)) {
 		ret = PTR_ERR(eint_as_int);
@@ -431,7 +425,7 @@ static struct notifier_block tpd_fb_notifier;
 /* use fb_notifier */
 static void touch_resume_workqueue_callback(struct work_struct *work)
 {
-	TPD_DEBUG("GTP touch_resume_workqueue_callback\n");
+	TPD_DEBUG("GTP %s\n", __func__);
 	g_tpd_drv->resume(NULL);
 	tpd_suspend_flag = 0;
 }
@@ -443,7 +437,7 @@ static int tpd_fb_notifier_callback(
 	int blank;
 	int err = 0;
 
-	TPD_DEBUG("tpd_fb_notifier_callback\n");
+	TPD_DEBUG("%s\n", __func__);
 
 	evdata = data;
 	/* If we aren't interested in this event, skip it immediately ... */
@@ -545,8 +539,10 @@ static void tpd_create_attributes(struct device *dev, struct tpd_attrs *attrs)
 {
 	int num = attrs->num;
 
-	for (; num > 0;)
-		device_create_file(dev, attrs->attr[--num]);
+	for (; num > 0;) {
+		if (device_create_file(dev, attrs->attr[--num]))
+			pr_info("mtk_tpd: tpd create attributes file failed\n");
+	}
 }
 
 //+ add by wanglongfei.wt for  tp drivers 20190830
@@ -683,6 +679,7 @@ static int tpd_probe(struct platform_device *pdev)
 //-Chk67730, sheqihao.wt, ADD, 20201019, for T99651AA2 lcd virtual panel add.
 
 	TPD_DMESG("enter %s, %d\n", __func__, __LINE__);
+	pr_info("enter %s, %d\n", __func__, __LINE__);
 
 	if (misc_register(&tpd_misc_device))
 		pr_info("mtk_tpd: tpd_misc_device register failed\n");
@@ -782,7 +779,7 @@ static int tpd_probe(struct platform_device *pdev)
 			tpd_driver_list[i].tpd_local_init();
 			/* msleep(1); */
 			if (tpd_load_status == 1) {
-				TPD_DMESG("tpd_probe, tpd_driver_name=%s\n",
+				TPD_DMESG("%s, tpd_driver_name=%s\n", __func__,
 					  tpd_driver_list[i].tpd_device_name);
 				g_tpd_drv = &tpd_driver_list[i];
 				break;
@@ -873,7 +870,7 @@ static void tpd_init_work_callback(struct work_struct *work)
 static int __init tpd_device_init(void)
 {
 	int res = 0;
-
+	pr_info("[%s-%s-%d]\n", __FILE__, __func__, __LINE__);
 	tpd_init_workqueue = create_singlethread_workqueue("mtk-tpd");
 	INIT_WORK(&tpd_init_work, tpd_init_work_callback);
 

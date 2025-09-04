@@ -412,6 +412,7 @@
 	status = "okay";
 };
 
+
 &pio {
 	fingerprint_reset_high: fingerprint_reset_high {
 		pins_cmd_dat {

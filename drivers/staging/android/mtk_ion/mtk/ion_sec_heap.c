@@ -361,7 +361,7 @@ static int ion_sec_heap_allocate(struct ion_heap *heap,
 	caller_tid = (unsigned int)current->tgid;
 
 	pbufferinfo = kzalloc(sizeof(*pbufferinfo), GFP_KERNEL);
-	if (IS_ERR_OR_NULL(pbufferinfo)) {
+	if (!pbufferinfo) {
 		IONMSG("%s Error. Allocate pbufferinfo failed.\n", __func__);
 		caller_pid = 0;
 		caller_tid = 0;
@@ -423,11 +423,15 @@ static int ion_sec_heap_allocate(struct ion_heap *heap,
 	refcount = 0;
 #endif
 
-	if (ret == -ENOMEM || sec_handle <= 0) {
+	if (ret == -ENOMEM) {
 		IONMSG("%s security out of memory, heap:%d\n",
-		       __func__, heap->id);
+			__func__, heap->id);
+		/* avoid recursive deadlock */
+		/* heap->debug_show(heap, NULL, NULL); */
+	}
+	if (sec_handle <= 0) {
 		IONMSG("%s alloc security memory failed, total size %zu\n",
-		       __func__, sec_heap_total_memory);
+			__func__, sec_heap_total_memory);
 		kfree(pbufferinfo);
 		caller_pid = 0;
 		caller_tid = 0;
@@ -752,6 +756,11 @@ static int __do_dump_share_fd(const void *data,
 		return 0;
 
 	bug_info = (struct ion_sec_buffer_info *)buffer->priv_virt;
+
+	if (!bug_info ||
+	    buffer->heap->type != (unsigned int)ION_HEAP_TYPE_MULTIMEDIA_SEC)
+		return 0;
+
 	if (!buffer->handle_count)
 		ION_DUMP(s, "0x%p %9d %16s %5d %5d %16s %4d\n",
 			 buffer, bug_info->pid,
@@ -791,11 +800,12 @@ static int ion_sec_heap_debug_show(struct ion_heap *heap,
 {
 	struct ion_device *dev = heap->dev;
 	struct rb_node *n;
-	int *secur_handle;
+	ion_phys_addr_t secur_handle;
 	struct ion_sec_buffer_info *bug_info;
 	bool has_orphaned = false;
 	size_t fr_size = 0;
 	size_t sec_size = 0;
+	size_t wfd_size = 0;
 	size_t prot_size = 0;
 	const char *seq_line = "---------------------------------------";
 
@@ -821,21 +831,20 @@ static int ion_sec_heap_debug_show(struct ion_heap *heap,
 		*buffer = rb_entry(n, struct ion_buffer, node);
 		if (buffer->heap->type != heap->type)
 			continue;
-		secur_handle = (int *)buffer->priv_virt;
 		bug_info = (struct ion_sec_buffer_info *)buffer->priv_virt;
+		secur_handle = bug_info->priv_phys;
 
 		if ((int)buffer->heap->type ==
 			(int)ION_HEAP_TYPE_MULTIMEDIA_SEC) {
 			ION_DUMP(s,
-				 "0x%p %8zu %3d %3d %3d 0x%10.x %3lu %3d %3d %3d %s %s",
+				 "0x%p %8zu %3d %3d %3d %10lx %3lu %3d %3d %3d %s %s\n",
 				 buffer, buffer->size, buffer->kmap_cnt,
 				 atomic_read(&buffer->ref.refcount.refs),
-				 buffer->handle_count, *secur_handle,
+				 buffer->handle_count, secur_handle,
 				 buffer->flags, bug_info->module_id,
 				 buffer->heap->id,
 				 buffer->pid, buffer->task_comm,
 				 bug_info->dbg_info.dbg_name);
-			ION_DUMP(s, ")\n");
 
 			if (buffer->heap->id == ION_HEAP_TYPE_MULTIMEDIA_SEC)
 				sec_size += buffer->size;
@@ -843,6 +852,8 @@ static int ion_sec_heap_debug_show(struct ion_heap *heap,
 				prot_size += buffer->size;
 			if (buffer->heap->id == ION_HEAP_TYPE_MULTIMEDIA_2D_FR)
 				fr_size += buffer->size;
+			if (buffer->heap->id == ION_HEAP_TYPE_MULTIMEDIA_WFD)
+				wfd_size += buffer->size;
 
 			if (!buffer->handle_count)
 				has_orphaned = true;
@@ -857,6 +868,7 @@ static int ion_sec_heap_debug_show(struct ion_heap *heap,
 	ION_DUMP(s, "%s\n", seq_line);
 	ION_DUMP(s, "%s\n", seq_line);
 	ION_DUMP(s, "%16s %16zu\n", "sec-sz:", sec_size);
+	ION_DUMP(s, "%16s %16zu\n", "wfd-sz:", wfd_size);
 	ION_DUMP(s, "%16s %16zu\n", "prot-sz:", prot_size);
 	ION_DUMP(s, "%16s %16zu\n", "2d-fr-sz:", fr_size);
 	ION_DUMP(s, "%s\n", seq_line);
@@ -903,6 +915,8 @@ static int ion_sec_heap_debug_show(struct ion_heap *heap,
 
 				if (handle->buffer->heap->id ==
 					ION_HEAP_TYPE_MULTIMEDIA_SEC ||
+				    handle->buffer->heap->id ==
+				    ION_HEAP_TYPE_MULTIMEDIA_WFD ||
 				    handle->buffer->heap->id ==
 				    ION_HEAP_TYPE_MULTIMEDIA_PROT ||
 				    handle->buffer->heap->id ==

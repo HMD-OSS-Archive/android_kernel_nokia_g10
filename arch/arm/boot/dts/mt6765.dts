@@ -643,6 +643,7 @@
 
 	infracfg_ao: infracfg_ao@10001000 {
 		compatible = "mediatek,common-infracfg_ao",
+			     "mediatek,infracfg_ao",
 			     "mediatek,mt6765-infracfg", "syscon";
 		reg = <0 0x10001000 0 0x1000>;
 		interrupts = <GIC_SPI 147 IRQ_TYPE_EDGE_RISING>;
@@ -934,6 +935,7 @@
 		interrupts = <GIC_SPI 192 IRQ_TYPE_LEVEL_HIGH>;
 		core_1 = "enable";
 		scp_sramSize = <0x00040000>;
+		scp_mpuRegionId = <27>;
 		scp_feature_tbl = <0 47>,   /* vow */
 				  <1 356>,  /* dsp */
 				  <2 62>,   /* sensor */
@@ -1029,11 +1031,7 @@
 	};
 
 	touch: touch {
-		compatible = "mediatek,touch";
-	};
-
-	lcm: lcm_gpio {
-		compatible = "mediatek,lcm_gpio";
+		compatible = "goodix,touch";
 	};
 
 	accdet: accdet {
@@ -3046,10 +3044,6 @@
 			"TOP_ULPOSC1_D8";
 	};
 
-	swtp: swtp {
-              compatible = "mediatek, swtp-eint";
-        };
-
 	dsi_te: dsi_te {
 		compatible = "mediatek, DSI_TE-eint";
 		status = "disabled";
@@ -3369,19 +3363,19 @@
 	lk_charger: lk_charger {
 		compatible = "mediatek,lk_charger";
 		enable_anime;
-		//enable_pe_plus;
-		//enable_pd20_reset;
-		//power_path_support;
+		enable_pe_plus;
+		enable_pd20_reset;
+		power_path_support;
 		max_charger_voltage = <6500000>;
 		fast_charge_voltage = <3000000>;
 
 		/* charging current */
 		usb_charger_current = <500000>;
-		ac_charger_current = <1550000>;
+		ac_charger_current = <2000000>;
 		ac_charger_input_current = <1500000>;
-		non_std_ac_charger_current = <900000>;
+		non_std_ac_charger_current = <500000>;
 		charging_host_charger_current = <1500000>;
-		ta_ac_charger_current = <1550000>;
+		ta_ac_charger_current = <3000000>;
 		pd_charger_current = <500000>;
 
 		/* battery temperature protection */
@@ -3503,32 +3497,26 @@
 		charger_configuration= <0>;
 
 		/* common */
-		battery_cv = <4400000>;
+		battery_cv = <4350000>;
 		max_charger_voltage = <6500000>;
 		min_charger_voltage = <4600000>;
 
 		/* sw jeita */
-		enable_sw_jeita;
-		jeita_temp_above_t4_cv = <4100000>;
-		jeita_temp_t3_to_t4_cv = <4100000>;
-		jeita_temp_t2_to_t3_cv = <4400000>;
-		jeita_temp_t1_to_t2_cv = <4400000>;
-		jeita_temp_t0_to_t1_cv = <4400000>;
-		jeita_temp_below_t0_cv = <4400000>;
-		jeita_temp_above_t4_cc = <0>;
-		jeita_temp_t3_to_t4_cc = <1550000>;
-		jeita_temp_t2_to_t3_cc = <1550000>;
-		jeita_temp_t1_to_t2_cc = <850000>;
-		jeita_temp_t0_to_t1_cc = <0>;
-		jeita_temp_below_t0_cc = <0>;
-		temp_t4_thres = <55>;
-		temp_t4_thres_minus_x_degree = <53>;
+		/* enable_sw_jeita; */
+		jeita_temp_above_t4_cv = <4240000>;
+		jeita_temp_t3_to_t4_cv = <4240000>;
+		jeita_temp_t2_to_t3_cv = <4340000>;
+		jeita_temp_t1_to_t2_cv = <4240000>;
+		jeita_temp_t0_to_t1_cv = <4040000>;
+		jeita_temp_below_t0_cv = <4040000>;
+		temp_t4_thres = <50>;
+		temp_t4_thres_minus_x_degree = <47>;
 		temp_t3_thres = <45>;
-		temp_t3_thres_minus_x_degree = <43>;
-		temp_t2_thres = <15>;
-		temp_t2_thres_plus_x_degree = <17>;
+		temp_t3_thres_minus_x_degree = <39>;
+		temp_t2_thres = <10>;
+		temp_t2_thres_plus_x_degree = <16>;
 		temp_t1_thres = <0>;
-		temp_t1_thres_plus_x_degree = <2>;
+		temp_t1_thres_plus_x_degree = <6>;
 		temp_t0_thres = <0>;
 		temp_t0_thres_plus_x_degree = <0>;
 		temp_neg_10_thres = <0>;
@@ -3536,13 +3524,13 @@
 		/* battery temperature protection */
 		enable_min_charge_temp;
 		min_charge_temp = <0>;
-		min_charge_temp_plus_x_degree = <2>;
-		max_charge_temp = <55>;
-		max_charge_temp_minus_x_degree = <53>;
+		min_charge_temp_plus_x_degree = <6>;
+		max_charge_temp = <50>;
+		max_charge_temp_minus_x_degree = <47>;
 
 		/* charging current */
 		usb_charger_current = <500000>;
-		ac_charger_current = <1550000>;
+		ac_charger_current = <2000000>;
 		ac_charger_input_current = <1500000>;
 		charging_host_charger_current = <1500000>;
 
@@ -3561,9 +3549,9 @@
 	extcon_usb: extcon_usb {
 		compatible = "mediatek,extcon-usb";
 		charger = <&mtk_charger_type>;
-		//vbus-supply = <&otg_vbus>;
-		//vbus-voltage = <5000000>;
-		//vbus-current = <1800000>;
+		vbus-supply = <&otg_vbus>;
+		vbus-voltage = <5000000>;
+		vbus-current = <1800000>;
 		dev-conn = <&usb>;
 		mediatek,bypss-typec-sink = <1>;
 	};

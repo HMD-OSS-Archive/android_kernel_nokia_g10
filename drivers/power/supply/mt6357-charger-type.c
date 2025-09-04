@@ -584,7 +584,9 @@ static int get_vbus_voltage(struct mtk_charger_type *info,
 
 void do_charger_detect(struct mtk_charger_type *info, bool en)
 {
-	union power_supply_propval prop_online, prop_type, prop_usb_type;
+	union power_supply_propval prop_online = {0};
+	union power_supply_propval prop_type = {0};
+	union power_supply_propval prop_usb_type = {0};
 	int ret = 0;
 
 #ifndef CONFIG_TCPC_CLASS
@@ -1032,7 +1034,7 @@ static int mt6357_charger_type_probe(struct platform_device *pdev)
 #if !(defined (CONFIG_WT_PROJECT_T99653AA1) || defined (CONFIG_WT_PROJECT_T99652AA1))
 	if (info->bc12_active) {
 #endif
-		info->ac_psy = devm_power_supply_register(&pdev->dev,
+		info->ac_psy = power_supply_register(&pdev->dev,
 				&info->ac_desc, &info->ac_cfg);
 
 		if (IS_ERR(info->ac_psy)) {
@@ -1041,7 +1043,7 @@ static int mt6357_charger_type_probe(struct platform_device *pdev)
 			return PTR_ERR(info->ac_psy);
 		}
 
-		info->usb_psy = devm_power_supply_register(&pdev->dev,
+		info->usb_psy = power_supply_register(&pdev->dev,
 				&info->usb_desc, &info->usb_cfg);
 
 		if (IS_ERR(info->usb_psy)) {

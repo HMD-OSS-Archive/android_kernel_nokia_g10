@@ -486,7 +486,7 @@ static int __maybe_unused mt6360_is_dcd_tout_enable(
 }
 #endif
 
-static bool is_usb_rdy(struct device *dev)
+bool is_usb_rdy(struct device *dev)
 {
 	struct device_node *node;
 	bool ready = false;
@@ -3101,7 +3101,7 @@ static int mt6360_boost_get_current_limit(struct regulator_dev *rdev)
 	if (ret < 0)
 		return ret;
 	ret = (ret & desc->csel_mask) >> shift;
-	if (ret > ARRAY_SIZE(mt6360_otg_oc_threshold))
+	if (ret >= ARRAY_SIZE(mt6360_otg_oc_threshold))
 		return -EINVAL;
 	return mt6360_otg_oc_threshold[ret];
 }

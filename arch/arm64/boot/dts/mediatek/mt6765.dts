@@ -640,6 +640,7 @@ firmware_class.path=/vendor/firmware";
 
 	infracfg_ao: infracfg_ao@10001000 {
 		compatible = "mediatek,common-infracfg_ao",
+			     "mediatek,infracfg_ao",
 			     "mediatek,mt6765-infracfg", "syscon";
 		reg = <0 0x10001000 0 0x1000>;
 		interrupts = <GIC_SPI 147 IRQ_TYPE_EDGE_RISING>;
@@ -941,6 +942,7 @@ firmware_class.path=/vendor/firmware";
 		interrupts = <GIC_SPI 192 IRQ_TYPE_LEVEL_HIGH>;
 		core_1 = "enable";
 		scp_sramSize = <0x00040000>;
+		scp_mpuRegionId = <27>;
 		scp_feature_tbl = <0 47>,   /* vow */
 				  <1 356>,  /* dsp */
 				  <2 62>,   /* sensor */
@@ -1475,6 +1477,8 @@ firmware_class.path=/vendor/firmware";
 		little-down-time = <750>;
 		big-rise-time = <1000>;
 		big-down-time = <750>;
+		nvmem = <&efuse>;
+		nvmem-names = "mtk_efuse";
 		nvmem-cells = <&efuse_segment &efuse_ly>;
 		nvmem-cell-names = "efuse_segment_cell","efuse_ly_cell";
 		L-table = <2000 96 1 1

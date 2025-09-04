@@ -49,7 +49,11 @@ struct page_change_data {
 	pgprot_t clear_mask;
 };
 
+#ifdef CONFIG_MTK_ENG_BUILD
+#if IS_ENABLED(CONFIG_SYSFS)
 static u64 ssmr_upper_limit = UPPER_LIMIT64;
+#endif
+#endif
 
 static struct device *ssmr_dev;
 
@@ -763,6 +767,7 @@ int ssmr_online(unsigned int feat)
 }
 EXPORT_SYMBOL(ssmr_online);
 
+#ifdef CONFIG_MTK_ENG_BUILD
 #if IS_ENABLED(CONFIG_SYSFS)
 static ssize_t ssmr_show(struct kobject *kobj, struct kobj_attribute *attr,
 			char *buf)
@@ -806,6 +811,12 @@ static ssize_t ssmr_store(struct kobject *kobj, struct kobj_attribute *attr,
 	char buf[64];
 	int buf_size;
 	int feat = 0, ret;
+
+
+	if (count >= 64) {
+		pr_info("copy size too long.\n");
+		return -EINVAL;
+	}
 
 	ret = sscanf(cmd, "%s", buf);
 	if (ret) {
@@ -870,6 +881,7 @@ static int memory_ssmr_sysfs_init(void)
 	return 0;
 }
 #endif /* end of CONFIG_SYSFS */
+#endif
 
 int ssmr_probe(struct platform_device *pdev)
 {
@@ -901,8 +913,10 @@ int ssmr_probe(struct platform_device *pdev)
 	}
 
 	/* ssmr sys file init */
+#ifdef CONFIG_MTK_ENG_BUILD
 #if IS_ENABLED(CONFIG_SYSFS)
 	memory_ssmr_sysfs_init();
+#endif
 #endif
 
 	get_reserved_cma_memory(&pdev->dev);

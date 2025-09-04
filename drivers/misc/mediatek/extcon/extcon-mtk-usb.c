@@ -4,6 +4,7 @@
  */
 
 #include <linux/extcon-provider.h>
+#include <linux/gpio/consumer.h>
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/irq.h>
@@ -33,6 +34,13 @@ static struct charger_device *primary_charger;
 #endif
 #else
 #endif
+
+#ifdef CONFIG_MTK_USB_TYPEC_U3_MUX
+#include "mux_switch.h"
+#endif
+
+static struct mtk_extcon_info *g_extcon;
+
 static const unsigned int usb_extcon_cable[] = {
 	EXTCON_USB,
 	EXTCON_USB_HOST,
@@ -116,6 +124,22 @@ static int mtk_usb_extcon_set_role(struct mtk_extcon_info *extcon,
 	return 0;
 }
 
+#if !defined(CONFIG_USB_MTK_HDRC)
+void mt_usb_connect()
+{
+	/* if (g_extcon)
+		mtk_usb_extcon_set_role(extcon, DUAL_PROP_DR_DEVICE); */
+}
+EXPORT_SYMBOL(mt_usb_connect);
+
+void mt_usb_disconnect()
+{
+	/* if (g_extcon)
+		mtk_usb_extcon_set_role(extcon, DUAL_PROP_DR_NONE); */
+}
+EXPORT_SYMBOL(mt_usb_disconnect);
+#endif
+
 static int mtk_usb_extcon_psy_notifier(struct notifier_block *nb,
 				unsigned long event, void *data)
 {
@@ -157,12 +181,18 @@ static int mtk_usb_extcon_psy_notifier(struct notifier_block *nb,
 	if (ival.intval)
 		return NOTIFY_DONE;
 
+#ifdef CONFIG_TCPC_CLASS
+	if (extcon->c_role == DUAL_PROP_DR_NONE && pval.intval &&
+			(tval.intval == POWER_SUPPLY_TYPE_USB ||
+			tval.intval == POWER_SUPPLY_TYPE_USB_CDP))
+		mtk_usb_extcon_set_role(extcon, DUAL_PROP_DR_DEVICE);
+#else
 	if (pval.intval && (tval.intval == POWER_SUPPLY_TYPE_USB ||
 			tval.intval == POWER_SUPPLY_TYPE_USB_CDP))
 		mtk_usb_extcon_set_role(extcon, DUAL_PROP_DR_DEVICE);
 	else
 		mtk_usb_extcon_set_role(extcon, DUAL_PROP_DR_NONE);
-
+#endif
 	return NOTIFY_DONE;
 }
 
@@ -222,12 +252,75 @@ static int mtk_usb_extcon_psy_init(struct mtk_extcon_info *extcon)
 	return 0;
 }
 
+#if defined ADAPT_CHARGER_V1
+#include <mt-plat/v1/charger_class.h>
+static struct charger_device *primary_charger;
+
+static int mtk_usb_extcon_set_vbus_v1(bool is_on) {
+	if (!primary_charger) {
+		primary_charger = get_charger_by_name("primary_chg");
+		if (!primary_charger) {
+			pr_info("%s: get primary charger device failed\n", __func__);
+			return -ENODEV;
+		}
+	}
+#if defined(CONFIG_MTK_GAUGE_VERSION) && (CONFIG_MTK_GAUGE_VERSION == 30)
+	pr_info("%s: is_on=%d\n", __func__, is_on);
+	if (is_on) {
+		charger_dev_enable_otg(primary_charger, true);
+		charger_dev_set_boost_current_limit(primary_charger,
+			1500000);
+		#if 0
+		{// # workaround
+			charger_dev_kick_wdt(primary_charger);
+			enable_boost_polling(true);
+		}
+		#endif
+	} else {
+		charger_dev_enable_otg(primary_charger, false);
+		#if 0
+			//# workaround
+			enable_boost_polling(false);
+		#endif
+	}
+#else
+	if (is_on) {
+		charger_dev_enable_otg(primary_charger, true);
+		charger_dev_set_boost_current_limit(primary_charger,
+			1500000);
+	} else {
+		charger_dev_enable_otg(primary_charger, false);
+	}
+#endif
+		return 0;
+}
+#endif //ADAPT_CHARGER_V1
+
 static int mtk_usb_extcon_set_vbus(struct mtk_extcon_info *extcon,
 							bool is_on)
 {
+	int ret;
+#if defined ADAPT_CHARGER_V1
+	ret = mtk_usb_extcon_set_vbus_v1(is_on);
+#else
 	struct regulator *vbus = extcon->vbus;
 	struct device *dev = extcon->dev;
-	int ret;
+
+#if defined(CONFIG_WT_PROJECT_T99621AA3) || defined(CONFIG_WT_PROJECT_T99651AA2) || defined(CONFIG_WT_PROJECT_T99653AA1)|| defined(CONFIG_WT_PROJECT_T99652AA1)
+#ifdef CONFIG_MTK_CHARGER
+	dev_info(dev,  "vbus_init<%d>\n", is_on);
+	if (!primary_charger) {
+	
+
+		primary_charger = get_charger_by_name("primary_chg");
+		if (!primary_charger) {
+			dev_info(dev,  "get primary charger device failed\n");
+			ret=-1;
+				return ret;
+	}
+	}
+#endif
+#endif
 
 
 #if defined(CONFIG_WT_PROJECT_T99621AA3) || defined(CONFIG_WT_PROJECT_T99651AA2) || defined(CONFIG_WT_PROJECT_T99653AA1)|| defined(CONFIG_WT_PROJECT_T99652AA1)
@@ -297,7 +390,9 @@ static int mtk_usb_extcon_set_vbus(struct mtk_extcon_info *extcon,
 
 	extcon->vbus_on = is_on;
 
-	return 0;
+	ret = 0;
+#endif //ADAPT_CHARGER_V1
+	return ret;
 }
 
 #ifdef CONFIG_TCPC_CLASS
@@ -321,17 +416,46 @@ static int mtk_extcon_tcpc_notifier(struct notifier_block *nb,
 		dev_info(dev, "old_state=%d, new_state=%d\n",
 				noti->typec_state.old_state,
 				noti->typec_state.new_state);
+
+#ifdef CONFIG_MTK_USB_TYPEC_U3_MUX
+		if ((noti->typec_state.new_state == TYPEC_ATTACHED_SNK ||
+			noti->typec_state.new_state == TYPEC_ATTACHED_NORP_SRC ||
+			noti->typec_state.new_state == TYPEC_ATTACHED_CUSTOM_SRC)) {
+			if (noti->typec_state.polarity == 0)
+				usb3_switch_set(TYPEC_ORIENTATION_REVERSE);
+			else
+				usb3_switch_set(TYPEC_ORIENTATION_NORMAL);
+		} else if (noti->typec_state.new_state == TYPEC_ATTACHED_SRC) {
+			if (g_extcon->support_u3) {
+				if (noti->typec_state.polarity == 0)
+					usb3_switch_set(TYPEC_ORIENTATION_REVERSE);
+				else
+					usb3_switch_set(TYPEC_ORIENTATION_NORMAL);
+			} else {
+				if (noti->typec_state.polarity == 0)
+					usb3_switch_set(TYPEC_ORIENTATION_NORMAL);
+				else
+					usb3_switch_set(TYPEC_ORIENTATION_REVERSE);
+			}
+		} else if (noti->typec_state.new_state == TYPEC_UNATTACHED) {
+			usb3_switch_set(TYPEC_ORIENTATION_NONE);
+		}
+#endif
 		if (noti->typec_state.old_state == TYPEC_UNATTACHED &&
 			noti->typec_state.new_state == TYPEC_ATTACHED_SRC) {
 			dev_info(dev, "Type-C SRC plug in\n");
 			mtk_usb_extcon_set_role(extcon, DUAL_PROP_DR_HOST);
 		} else if (!(extcon->bypss_typec_sink) &&
 			noti->typec_state.old_state == TYPEC_UNATTACHED &&
-			noti->typec_state.new_state == TYPEC_ATTACHED_SNK) {
+			(noti->typec_state.new_state == TYPEC_ATTACHED_SNK ||
+			noti->typec_state.new_state == TYPEC_ATTACHED_NORP_SRC ||
+			noti->typec_state.new_state == TYPEC_ATTACHED_CUSTOM_SRC)) {
 			dev_info(dev, "Type-C SINK plug in\n");
 			mtk_usb_extcon_set_role(extcon, DUAL_PROP_DR_DEVICE);
 		} else if ((noti->typec_state.old_state == TYPEC_ATTACHED_SRC ||
-			noti->typec_state.old_state == TYPEC_ATTACHED_SNK) &&
+			noti->typec_state.old_state == TYPEC_ATTACHED_SNK ||
+			noti->typec_state.old_state == TYPEC_ATTACHED_NORP_SRC ||
+			noti->typec_state.old_state == TYPEC_ATTACHED_CUSTOM_SRC) &&
 			noti->typec_state.new_state == TYPEC_UNATTACHED) {
 			dev_info(dev, "Type-C plug out\n");
 			mtk_usb_extcon_set_role(extcon, DUAL_PROP_DR_NONE);
@@ -341,12 +465,12 @@ static int mtk_extcon_tcpc_notifier(struct notifier_block *nb,
 		dev_info(dev, "%s dr_swap, new role=%d\n",
 				__func__, noti->swap_state.new_role);
 		if (noti->swap_state.new_role == PD_ROLE_UFP &&
-				extcon->c_role == DUAL_PROP_DR_HOST) {
+				extcon->c_role != DUAL_PROP_DR_DEVICE) {
 			dev_info(dev, "switch role to device\n");
 			mtk_usb_extcon_set_role(extcon, DUAL_PROP_DR_NONE);
 			mtk_usb_extcon_set_role(extcon, DUAL_PROP_DR_DEVICE);
 		} else if (noti->swap_state.new_role == PD_ROLE_DFP &&
-				extcon->c_role == DUAL_PROP_DR_DEVICE) {
+				extcon->c_role != DUAL_PROP_DR_HOST) {
 			dev_info(dev, "switch role to host\n");
 			mtk_usb_extcon_set_role(extcon, DUAL_PROP_DR_NONE);
 			mtk_usb_extcon_set_role(extcon, DUAL_PROP_DR_HOST);
@@ -460,6 +584,44 @@ static int mtk_usb_extcon_id_pin_init(struct mtk_extcon_info *extcon)
 	return 0;
 }
 
+#if defined ADAPT_PSY_V1
+static void issue_connection_work(unsigned int dr)
+{
+	if (!g_extcon) {
+		pr_info("g_extcon = NULL\n");
+		return;
+	}
+
+	/* issue connection work */
+	mtk_usb_extcon_set_role(g_extcon, dr);
+}
+
+void mt_usb_connect_v1(void)
+{
+	pr_info("%s in mtk extcon\n", __func__);
+
+#ifdef CONFIG_TCPC_CLASS
+	/* check current role to avoid power role swap issue */
+	if (g_extcon && g_extcon->c_role == DUAL_PROP_DR_NONE)
+		issue_connection_work(DUAL_PROP_DR_DEVICE);
+#else
+	issue_connection_work(DUAL_PROP_DR_DEVICE);
+#endif
+}
+EXPORT_SYMBOL_GPL(mt_usb_connect_v1);
+
+void mt_usb_disconnect_v1(void)
+{
+	pr_info("%s  in mtk extcon\n", __func__);
+#ifdef CONFIG_TCPC_CLASS
+	/* disconnect by tcpc notifier */
+#else
+	issue_connection_work(DUAL_PROP_DR_NONE);
+#endif
+}
+EXPORT_SYMBOL_GPL(mt_usb_disconnect_v1);
+#endif //ADAPT_PSY_V1
+
 static int mtk_usb_extcon_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -467,12 +629,11 @@ static int mtk_usb_extcon_probe(struct platform_device *pdev)
 	struct platform_device *conn_pdev;
 	struct device_node *conn_np;
 	int ret;
-	pr_info("%s %d\n", __func__, __LINE__);
+
 	extcon = devm_kzalloc(&pdev->dev, sizeof(*extcon), GFP_KERNEL);
 	if (!extcon)
 		return -ENOMEM;
 
-	pr_info("%s %d\n", __func__, __LINE__);
 	extcon->dev = dev;
 
 	/* extcon */
@@ -482,7 +643,6 @@ static int mtk_usb_extcon_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
-	pr_info("%s %d\n", __func__, __LINE__);
 	ret = devm_extcon_dev_register(dev, extcon->edev);
 	if (ret < 0) {
 		dev_info(dev, "failed to register extcon device\n");
@@ -496,13 +656,11 @@ static int mtk_usb_extcon_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	pr_info("%s %d\n", __func__, __LINE__);
 	conn_pdev = of_find_device_by_node(conn_np);
 	if (!conn_pdev) {
 		dev_info(dev, "failed to get dev-conn pdev\n");
 		return -EINVAL;
 	}
-	pr_info("%s %d\n", __func__, __LINE__);
 
 	extcon->dev_conn.endpoint[0] = kasprintf(GFP_KERNEL,
 				"%s-role-switch", dev_name(&conn_pdev->dev));
@@ -516,7 +674,6 @@ static int mtk_usb_extcon_probe(struct platform_device *pdev)
 		return PTR_ERR(extcon->role_sw);
 	}
 
-	pr_info("%s %d\n", __func__, __LINE__);
 	/* vbus */
 	extcon->vbus = devm_regulator_get(dev, "usb-otg-vbus");
 	if (IS_ERR(extcon->vbus)) {
@@ -536,10 +693,13 @@ static int mtk_usb_extcon_probe(struct platform_device *pdev)
 		of_property_read_bool(dev->of_node,
 			"mediatek,bypss-typec-sink");
 
-	pr_info("%s %d\n", __func__, __LINE__);
 	extcon->extcon_wq = create_singlethread_workqueue("extcon_usb");
 	if (!extcon->extcon_wq)
 		return -ENOMEM;
+
+	extcon->support_u3 = !of_property_read_bool(dev->of_node, "not_support_u3");
+	if (!extcon->support_u3)
+		dev_info(dev, "platform does not support U3\n");
 
 	extcon->c_role = DUAL_PROP_DR_DEVICE;
 
@@ -565,6 +725,8 @@ static int mtk_usb_extcon_probe(struct platform_device *pdev)
 	if (ret < 0)
 		dev_err(dev, "failed to init tcpc\n");
 #endif
+
+	g_extcon = extcon;
 
 	platform_set_drvdata(pdev, extcon);
 
@@ -609,7 +771,6 @@ static struct platform_driver mtk_usb_extcon_driver = {
 
 static int __init mtk_usb_extcon_init(void)
 {
-	pr_info("%s %d\n", __func__, __LINE__);
 	return platform_driver_register(&mtk_usb_extcon_driver);
 }
 late_initcall(mtk_usb_extcon_init);

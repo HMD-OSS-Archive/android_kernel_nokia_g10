@@ -44,6 +44,15 @@
 #if defined(CONFIG_MMC_MTK_PRO)
 #include "mtk_sd.h"
 #endif
+
+#if defined(CONFIG_MMC_MTK)
+#include <linux/of.h>
+#include <linux/of_fdt.h>
+#include <linux/of_irq.h>
+#include <linux/of_platform.h>
+static struct mmc_host *mtk_mmc_host[] = {NULL};
+#endif
+
 #ifdef CONFIG_SCSI_UFS_MEDIATEK
 #include "ufs-mediatek.h"
 #endif
@@ -315,6 +324,16 @@ int emmc_rpmb_switch(struct mmc_card *card, struct emmc_rpmb_blk_data *md)
 		}
 		mmc_card_clr_cmdq(card);
 	}
+#elif defined(CONFIG_MMC_MTK)
+	if (md->part_type == EXT_CSD_PART_CONFIG_ACC_RPMB) {
+		if (card->ext_csd.cmdq_en) {
+			ret = mmc_cmdq_disable(card);
+			if (ret) {
+				MSG(ERR, "CMDQ disabled failed!(%d)\n", ret);
+				return ret;
+			}
+		}
+	}
 #endif
 
 	if (mmc_card_mmc(card)) {
@@ -342,6 +361,15 @@ int emmc_rpmb_switch(struct mmc_card *card, struct emmc_rpmb_blk_data *md)
 					mmc_hostname(card->host), ret);
 		else
 			mmc_card_set_cmdq(card);
+	}
+#elif defined(CONFIG_MMC_MTK)
+	if (main_md->part_curr == EXT_CSD_PART_CONFIG_ACC_RPMB) {
+		if (card->reenable_cmdq && !card->ext_csd.cmdq_en) {
+			ret = mmc_cmdq_enable(card);
+			if (ret)
+				pr_notice("%s enable CMDQ error %d,so just work without CMDQ\n",
+					mmc_hostname(card->host), ret);
+		}
 	}
 #endif
 
@@ -1425,7 +1453,7 @@ int rpmb_req_get_wc_emmc(struct mmc_card *card, u8 *key, u32 *wc)
 	struct s_rpmb *rpmb_frame;
 	u8 nonce[RPMB_SZ_NONCE] = {0};
 	u8 hmac[RPMB_SZ_MAC];
-	int ret;
+	int ret = 0;
 
 	MSG(INFO, "%s start!!!\n", __func__);
 
@@ -1498,16 +1526,16 @@ int rpmb_req_ioctl_write_data_emmc(struct mmc_card *card,
 {
 	struct emmc_rpmb_req rpmb_req;
 	struct s_rpmb *rpmb_frame;
-	u32 tran_size, left_size = param->data_len;
+	u32 tran_size = 0, left_size = param->data_len;
 	u32 wc = 0xFFFFFFFF;
-	u16 iCnt, total_blkcnt, tran_blkcnt, left_blkcnt;
-	u16 blkaddr;
+	u16 iCnt = 0, total_blkcnt = 0, tran_blkcnt = 0, left_blkcnt = 0;
+	u16 blkaddr = 0;
 	u8 hmac[RPMB_SZ_MAC];
 	u8 *dataBuf, *dataBuf_start;
-	int i, ret = 0;
+	int i = 0, ret = 0;
 #ifdef RPMB_MULTI_BLOCK_ACCESS
 	u8 write_blks_one_time = 0;
-	u32 size_for_hmac;
+	u32 size_for_hmac = 0;
 #endif
 
 	MSG(INFO, "%s start!!!\n", __func__);
@@ -1759,15 +1787,15 @@ int rpmb_req_ioctl_read_data_emmc(struct mmc_card *card,
 	 * so I use dynamic alloc.
 	 */
 	struct s_rpmb *rpmb_frame;
-	u32 tran_size, left_size = param->data_len;
-	u16 iCnt, total_blkcnt, tran_blkcnt, left_blkcnt;
-	u16 blkaddr;
+	u32 tran_size = 0, left_size = param->data_len;
+	u16 iCnt = 0, total_blkcnt = 0, tran_blkcnt = 0, left_blkcnt = 0;
+	u16 blkaddr = 0;
 	u8 nonce[RPMB_SZ_NONCE] = {0};
 	u8 hmac[RPMB_SZ_MAC];
 	u8 *dataBuf, *dataBuf_start;
-	int i, ret = 0;
+	int i = 0, ret = 0;
 #ifdef RPMB_MULTI_BLOCK_ACCESS
-	u32 size_for_hmac;
+	u32 size_for_hmac = 0;
 #endif
 	MSG(INFO, "%s start!!!\n", __func__);
 
@@ -1998,7 +2026,7 @@ int ut_rpmb_req_get_wc(struct mmc_card *card, unsigned int *wc)
 	struct emmc_rpmb_req rpmb_req;
 	struct s_rpmb rpmb_frame;
 	u8 nonce[RPMB_SZ_NONCE] = {0};
-	int ret;
+	int ret = 0;
 
 	memset(&rpmb_frame, 0, sizeof(rpmb_frame));
 	get_random_bytes(nonce, RPMB_SZ_NONCE);
@@ -2042,7 +2070,7 @@ int ut_rpmb_req_read_data(struct mmc_card *card,
 	struct s_rpmb *param, u32 blk_cnt)/*struct mmc_card *card, */
 {
 	struct emmc_rpmb_req rpmb_req;
-	int ret;
+	int ret = 0;
 
 	rpmb_req.type = RPMB_READ_DATA;
 	rpmb_req.blk_cnt = blk_cnt;
@@ -2061,7 +2089,7 @@ int ut_rpmb_req_write_data(struct mmc_card *card,
 	struct s_rpmb *param, u32 blk_cnt)/*struct mmc_card *card, */
 {
 	struct emmc_rpmb_req rpmb_req;
-	int ret;
+	int ret = 0;
 
 	rpmb_req.type = RPMB_WRITE_DATA;
 	rpmb_req.blk_cnt = blk_cnt;
@@ -2088,7 +2116,7 @@ EXPORT_SYMBOL(ut_rpmb_req_write_data);
 #ifndef CONFIG_TEE
 static int rpmb_execute_ufs(u32 cmdId)
 {
-	int ret;
+	int ret = 0;
 
 	switch (cmdId) {
 
@@ -2140,7 +2168,7 @@ static int rpmb_execute_ufs(u32 cmdId)
 
 static int rpmb_gp_execute_ufs(u32 cmdId)
 {
-	int ret;
+	int ret = 0;
 
 	switch (cmdId) {
 
@@ -2193,12 +2221,16 @@ static int rpmb_gp_execute_ufs(u32 cmdId)
 #endif
 
 #ifndef CONFIG_TEE
-#if defined(CONFIG_MMC_MTK_PRO)
+#if defined(CONFIG_MMC_MTK_PRO) || defined(CONFIG_MMC_MTK)
 static int rpmb_execute_emmc(u32 cmdId)
 {
-	int ret;
-
+	int ret = 0;
+#if defined(CONFIG_MMC_MTK_PRO)
 	struct mmc_card *card = mtk_msdc_host[0]->mmc->card;
+#else
+	struct mmc_host *mmc = mtk_mmc_host[0];
+	struct mmc_card *card = mmc->card;
+#endif
 	struct emmc_rpmb_req rpmb_req;
 
 	switch (cmdId) {
@@ -2279,12 +2311,16 @@ static int rpmb_execute_emmc(u32 cmdId)
 #endif
 #endif
 
-#if defined(CONFIG_MMC_MTK_PRO)
+#if defined(CONFIG_MMC_MTK_PRO) || defined(CONFIG_MMC_MTK)
 static int rpmb_gp_execute_emmc(u32 cmdId)
 {
-	int ret;
-
+	int ret = 0;
+#if defined(CONFIG_MMC_MTK_PRO)
 	struct mmc_card *card = mtk_msdc_host[0]->mmc->card;
+#else
+	struct mmc_host *mmc = mtk_mmc_host[0];
+	struct mmc_card *card = mmc->card;
+#endif
 	struct emmc_rpmb_req rpmb_req;
 
 	switch (cmdId) {
@@ -2367,7 +2403,7 @@ static int rpmb_gp_execute_emmc(u32 cmdId)
 int rpmb_listenDci(void *data)
 {
 	enum mc_result mc_ret;
-	u32 cmdId;
+	u32 cmdId = 0;
 
 	MSG(INFO, "%s: DCI listener.\n", __func__);
 
@@ -2393,6 +2429,11 @@ int rpmb_listenDci(void *data)
 		/* Received exception. */
 		if (mtk_msdc_host[0] && mtk_msdc_host[0]->mmc
 			&& mtk_msdc_host[0]->mmc->card)
+			mc_ret = rpmb_execute_emmc(cmdId);
+		else
+#elif defined(CONFIG_MMC_MTK)
+		/* Received exception. */
+		if (mtk_mmc_host[0] && mtk_mmc_host[0]->card)
 			mc_ret = rpmb_execute_emmc(cmdId);
 		else
 #endif
@@ -2501,7 +2542,7 @@ static int rpmb_open_session(void)
 int rpmb_gp_listenDci(void *data)
 {
 	enum mc_result mc_ret;
-	u32 cmdId;
+	u32 cmdId = 0;
 
 	MSG(ERR, "%s: DCI listener.\n", __func__);
 
@@ -2527,6 +2568,11 @@ int rpmb_gp_listenDci(void *data)
 		/* Received exception. */
 		if (mtk_msdc_host[0] && mtk_msdc_host[0]->mmc
 			&& mtk_msdc_host[0]->mmc->card)
+			mc_ret = rpmb_gp_execute_emmc(cmdId);
+		else
+#elif defined(CONFIG_MMC_MTK)
+		/* Received exception. */
+		if (mtk_mmc_host[0] && mtk_mmc_host[0]->card)
 			mc_ret = rpmb_gp_execute_emmc(cmdId);
 		else
 #endif
@@ -2638,7 +2684,7 @@ static int rpmb_gp_open_session(void)
 
 static int rpmb_thread(void *context)
 {
-	int ret;
+	int ret = 0;
 
 	MSG(INFO, "%s start\n", __func__);
 
@@ -2673,7 +2719,7 @@ long rpmb_ioctl_ufs(struct file *file, unsigned int cmd, unsigned long arg)
 	struct rpmb_ioc_param param;
 #if (defined(CONFIG_MICROTRUST_TEE_SUPPORT))
 	u32 rpmb_size = 0;
-	u32 arg_k;
+	u32 arg_k = 0;
 	struct rpmb_infor rpmbinfor;
 	struct rpmb_dev *rawdev_ufs_rpmb;
 
@@ -2894,11 +2940,11 @@ long rpmb_ioctl_emmc(struct file *file, unsigned int cmd, unsigned long arg)
 #endif
 
 #if (defined(CONFIG_MICROTRUST_TEE_SUPPORT))
-	u32 arg_k;
+	u32 arg_k = 0;
 	u32 rpmb_size = 0;
 	struct rpmb_infor rpmbinfor;
 	unsigned int *arg_p = (unsigned int *)arg;
-	unsigned int user_arg;
+	unsigned int user_arg = 0;
 
 	memset(&rpmbinfor, 0, sizeof(struct rpmb_infor));
 #endif
@@ -2909,6 +2955,10 @@ long rpmb_ioctl_emmc(struct file *file, unsigned int cmd, unsigned long arg)
 		return -EFAULT;
 
 	card = mtk_msdc_host[0]->mmc->card;
+#elif defined(CONFIG_MMC_MTK)
+	if (!mtk_mmc_host[0] || !mtk_mmc_host[0]->card)
+		return -EFAULT;
+	card = mtk_mmc_host[0]->card;
 #else
 	card = NULL;
 	ret = -EFAULT;
@@ -3187,7 +3237,7 @@ static const struct file_operations rpmb_fops_emmc = {
 	.write = NULL,
 	.read = NULL,
 };
-#if defined(CONFIG_MMC_MTK_PRO)
+#if defined(CONFIG_MMC_MTK_PRO) || defined(CONFIG_MMC_MTK)
 struct tag_bootmode {
 	u32 size;
 	u32 tag;
@@ -3223,12 +3273,30 @@ static int dt_get_boot_type(void)
 	return ret;
 }
 #endif
+
+#if defined(CONFIG_MMC_MTK)
+int mmc_rpmb_register(struct mmc_host *mmc)
+{
+	int ret = 0;
+
+	if (!(mmc->caps2 & MMC_CAP2_NO_MMC))
+		mtk_mmc_host[0] = mmc;
+	else if (!(mmc->caps2 & MMC_CAP2_NO_SD))
+		return ret;
+	else
+		return -EINVAL;
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(mmc_rpmb_register);
+#endif
+
 static int __init rpmb_init(void)
 {
 	int alloc_ret = -1;
 	int cdev_ret = -1;
-	int major;
-	dev_t dev;
+	int major = -1;
+	dev_t dev = 0;
 	struct device *device = NULL;
 
 	MSG(INFO, "%s start\n", __func__);
@@ -3242,7 +3310,7 @@ static int __init rpmb_init(void)
 
 	major = MAJOR(dev);
 
-#if defined(CONFIG_MMC_MTK_PRO)
+#if defined(CONFIG_MMC_MTK_PRO) || defined(CONFIG_MMC_MTK)
 	if (dt_get_boot_type() == BOOTDEV_SDMMC)
 		cdev_init(&rpmb_dev, &rpmb_fops_emmc);
 	else

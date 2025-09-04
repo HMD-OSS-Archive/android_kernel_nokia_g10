@@ -188,7 +188,7 @@ static int wdma_config_yuv420(enum DISP_MODULE_ENUM module,
 		int m4u_port;
 		int sec = -1, sec_id = -1;
 		ion_phys_addr_t sec_hdl = 0;
-		enum TRUSTED_MEM_REQ_TYPE mem_type;
+		enum TRUSTED_MEM_REQ_TYPE mem_type = -1;
 
 		m4u_port = DISP_M4U_PORT_DISP_WDMA0;
 		if (unlikely(!ion_hnd)) {
@@ -198,7 +198,7 @@ static int wdma_config_yuv420(enum DISP_MODULE_ENUM module,
 		}
 		mem_type = ion_hdl2sec_type(ion_hnd, &sec, &sec_id, &sec_hdl);
 
-		if (unlikely(mem_type < 0)) {
+		if (mem_type == -1) {
 			DISP_LOG_E("normal memory set as secure\n");
 			return 0;
 		}
@@ -288,7 +288,7 @@ static int wdma_config(enum DISP_MODULE_ENUM module,
 		int m4u_port = DISP_M4U_PORT_DISP_WDMA0;
 		int sec = -1, sec_id = -1;
 		ion_phys_addr_t sec_hdl = 0;
-		enum TRUSTED_MEM_REQ_TYPE mem_type;
+		enum TRUSTED_MEM_REQ_TYPE mem_type = -1;
 
 		m4u_port = DISP_M4U_PORT_DISP_WDMA0;
 		if (unlikely(!ion_hnd)) {
@@ -299,7 +299,7 @@ static int wdma_config(enum DISP_MODULE_ENUM module,
 		}
 		mem_type = ion_hdl2sec_type(ion_hnd, &sec, &sec_id, &sec_hdl);
 
-		if (unlikely(mem_type < 0)) {
+		if (mem_type == -1) {
 			DISP_LOG_E("normal memory set as secure\n");
 			return 0;
 		}
@@ -1163,6 +1163,8 @@ static inline int wdma_switch_to_sec(enum DISP_MODULE_ENUM module, void *handle)
 	enum CMDQ_ENG_ENUM cmdq_engine;
 	enum CMDQ_EVENT_ENUM cmdq_event;
 
+	DISPFUNC();
+
 	/* cmdq_engine = module_to_cmdq_engine(module); */
 	cmdq_engine = wdma_idx == 0 ?  CMDQ_ENG_DISP_WDMA0 :
 						CMDQ_ENG_DISP_WDMA1;
@@ -1190,6 +1192,8 @@ int wdma_switch_to_nonsec(enum DISP_MODULE_ENUM module, void *handle)
 	enum CMDQ_ENG_ENUM cmdq_engine;
 	enum CMDQ_EVENT_ENUM cmdq_event;
 	enum CMDQ_EVENT_ENUM cmdq_event_nonsec_end;
+
+	DISPFUNC();
 
 	cmdq_engine = wdma_idx == 0 ?  CMDQ_ENG_DISP_WDMA0 :
 						CMDQ_ENG_DISP_WDMA1;

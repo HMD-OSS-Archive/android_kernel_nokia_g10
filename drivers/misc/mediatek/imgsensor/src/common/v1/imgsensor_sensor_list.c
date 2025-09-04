@@ -16,6 +16,17 @@
  */
 struct IMGSENSOR_INIT_FUNC_LIST kdSensorList[MAX_NUM_OF_SUPPORT_SENSOR] = {
 
+#if defined(S5K4H7_MIPI_RAW)
+	{S5K4H7_SENSOR_ID,
+	SENSOR_DRVNAME_S5K4H7_MIPI_RAW,
+	S5K4H7_MIPI_RAW_SensorInit},
+#endif
+#if defined(S5K4H7SUB_MIPI_RAW)
+	{S5K4H7SUB_SENSOR_ID,
+	SENSOR_DRVNAME_S5K4H7SUB_MIPI_RAW,
+	S5K4H7SUB_MIPI_RAW_SensorInit},
+#endif
+
 //+bug584789,chenbocheng.wt,MODIFY,2020/10/13,main s5kgm1 and depth gc02m1b sensor bringup
 #if defined(RONIN_S5KGM1_REAR_TXD_MIPI_RAW)
                 {RONIN_S5KGM1_REAR_TXD_SENSOR_ID,

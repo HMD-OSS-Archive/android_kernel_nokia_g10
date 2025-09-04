@@ -13,17 +13,30 @@
 #include "inc/tcpci_typec.h"
 #ifdef CONFIG_MTK_CHARGER
 #include <charger_class.h>
+#ifdef ADAPT_CHARGER_V1
+#include <mt-plat/v1/mtk_charger.h>
+#else
+#include <mtk_charger.h>
+#endif
 #endif /* CONFIG_MTK_CHARGER */
 #ifdef CONFIG_WATER_DETECTION
 #include <mt-plat/mtk_boot.h>
 #endif /* CONFIG_WATER_DETECTION */
 
+#include "usb_boost.h"
+
 #define RT_PD_MANAGER_VERSION	"1.0.8_MTK"
+
+#ifdef CONFIG_OCP96011_I2C
+#include "../switch/ocp96011-i2c.h"
+extern void typec_headset_queue_work(void);
+#endif
 
 struct rt_pd_manager_data {
 	struct device *dev;
 #ifdef CONFIG_MTK_CHARGER
 	struct charger_device *chg_dev;
+	struct charger_consumer *chg_consumer;
 #ifdef CONFIG_WATER_DETECTION
 	struct power_supply *chg_psy;
 #endif /* CONFIG_WATER_DETECTION */
@@ -62,7 +75,9 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 	uint32_t partner_vdos[VDO_MAX_NR];
 #ifdef CONFIG_WATER_DETECTION
 #ifdef CONFIG_MTK_CHARGER
+#ifndef ADAPT_CHARGER_V1
 	union power_supply_propval val = {.intval = 0};
+#endif /* ADAPT_CHARGER_V */
 #endif /* CONFIG_MTK_CHARGER */
 #endif /* CONFIG_WATER_DETECTION */
 
@@ -78,13 +93,18 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 		    (rpmd->sink_ma_new != rpmd->sink_ma_old)) {
 			rpmd->sink_mv_old = rpmd->sink_mv_new;
 			rpmd->sink_ma_old = rpmd->sink_ma_new;
+#ifdef ADAPT_CHARGER_V1
+			charger_manager_enable_power_path(
+				rpmd->chg_consumer, MAIN_CHARGER, true);
+#else
 			if (rpmd->sink_mv_new && rpmd->sink_ma_new) {
 				charger_dev_enable_powerpath(rpmd->chg_dev,
-							     true);
+							true);
 			} else {
 				charger_dev_enable_powerpath(rpmd->chg_dev,
-							     false);
+							false);
 			}
+#endif /* ADAPT_CHARGER_V1 */
 		}
 #endif /* CONFIG_MTK_CHARGER */
 		break;
@@ -153,10 +173,18 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 			   new_state == TYPEC_ATTACHED_AUDIO) {
 			dev_info(rpmd->dev, "%s Audio plug in\n", __func__);
 			/* enable AudioAccessory connection */
+#ifdef CONFIG_OCP96011_I2C
+			ocp96011_switch_event(0);
+			typec_headset_queue_work();
+#endif
 		} else if (old_state == TYPEC_ATTACHED_AUDIO &&
 			   new_state == TYPEC_UNATTACHED) {
 			dev_info(rpmd->dev, "%s Audio plug out\n", __func__);
 			/* disable AudioAccessory connection */
+#ifdef CONFIG_OCP96011_I2C
+			ocp96011_switch_event(1);
+			typec_headset_queue_work();
+#endif
 		}
 
 		if (new_state == TYPEC_UNATTACHED) {
@@ -314,10 +342,15 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 			dev_info(rpmd->dev, "%s Water is detected in KPOC\n",
 					    __func__);
 #ifdef CONFIG_MTK_CHARGER
+#ifdef ADAPT_CHARGER_V1
+			charger_manager_enable_high_voltage_charging(
+					rpmd->chg_consumer, false);
+#else
 			val.intval = 0;
 			power_supply_set_property(rpmd->chg_psy,
 						  POWER_SUPPLY_PROP_VOLTAGE_MAX,
 						  &val);
+#endif /* ADAPT_CHARGER_V1 */
 #endif /* CONFIG_MTK_CHARGER */
 		} else {
 			usb_dpdm_pulldown(true);
@@ -326,10 +359,15 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 			dev_info(rpmd->dev, "%s Water is removed in KPOC\n",
 					    __func__);
 #ifdef CONFIG_MTK_CHARGER
+#ifdef ADAPT_CHARGER_V1
+			charger_manager_enable_high_voltage_charging(
+					rpmd->chg_consumer, true);
+#else
 			val.intval = 1;
 			power_supply_set_property(rpmd->chg_psy,
 						  POWER_SUPPLY_PROP_VOLTAGE_MAX,
 						  &val);
+#endif /* ADAPT_CHARGER_V1 */
 #endif /* CONFIG_MTK_CHARGER */
 		}
 		break;
@@ -380,6 +418,8 @@ static int tcpc_typec_dr_set(const struct typec_capability *cap,
 
 	dev_info(rpmd->dev, "%s role = %d\n", __func__, role);
 
+	usb_boost();
+
 	if (role == TYPEC_HOST) {
 		if (data_role == PD_ROLE_UFP) {
 			do_swap = true;
@@ -417,6 +457,8 @@ static int tcpc_typec_pr_set(const struct typec_capability *cap,
 	bool do_swap = false;
 
 	dev_info(rpmd->dev, "%s role = %d\n", __func__, role);
+
+	usb_boost();
 
 	if (role == TYPEC_SOURCE) {
 		if (power_role == PD_ROLE_SINK) {
@@ -495,6 +537,8 @@ static int tcpc_typec_port_type_set(const struct typec_capability *cap,
 
 	dev_info(rpmd->dev, "%s type = %d, as_sink = %d\n",
 			    __func__, type, as_sink);
+
+	usb_boost();
 
 	switch (type) {
 	case TYPEC_PORT_SNK:
@@ -580,7 +624,15 @@ static int rt_pd_manager_probe(struct platform_device *pdev)
 		ret = -ENODEV;
 		goto err_get_chg_dev;
 	}
-
+#ifdef ADAPT_CHARGER_V1
+	rpmd->chg_consumer = charger_manager_get_by_name(rpmd->dev,
+								 "charger_port1");
+	if (!rpmd->chg_consumer) {
+		dev_notice(rpmd->dev, "%s get chg consumer fail\n", __func__);
+		ret = -ENODEV;
+		goto err_get_chg_consumer;
+	}
+#else
 #ifdef CONFIG_WATER_DETECTION
 	rpmd->chg_psy = power_supply_get_by_name("mtk-master-charger");
 	if (!rpmd->chg_psy) {
@@ -589,6 +641,7 @@ static int rt_pd_manager_probe(struct platform_device *pdev)
 		goto err_get_chg_psy;
 	}
 #endif /* CONFIG_WATER_DETECTION */
+#endif /* ADAPT_CHARGER_V1 */
 #endif /* CONFIG_MTK_CHARGER */
 
 	rpmd->tcpc = tcpc_dev_get_by_name("type_c_port0");
@@ -636,10 +689,14 @@ err_reg_tcpc_notifier:
 err_init_typec:
 err_get_tcpc_dev:
 #ifdef CONFIG_MTK_CHARGER
+#ifdef ADAPT_CHARGER_V1
+err_get_chg_consumer:
+#else
 #ifdef CONFIG_WATER_DETECTION
 	power_supply_put(rpmd->chg_psy);
 err_get_chg_psy:
 #endif /* CONFIG_WATER_DETECTION */
+#endif /* ADAPT_CHARGER_V1 */
 err_get_chg_dev:
 #endif /* CONFIG_MTK_CHARGER */
 	return ret;
@@ -661,9 +718,11 @@ static int rt_pd_manager_remove(struct platform_device *pdev)
 
 	typec_unregister_port(rpmd->typec_port);
 #ifdef CONFIG_MTK_CHARGER
+#ifndef ADAPT_CHARGER_V1
 #ifdef CONFIG_WATER_DETECTION
 	power_supply_put(rpmd->chg_psy);
 #endif /* CONFIG_WATER_DETECTION */
+#endif /* ADAPT_CHARGER_V */
 #endif /* CONFIG_MTK_CHARGER */
 
 	return ret;
